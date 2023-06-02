@@ -3143,10 +3143,11 @@ def sample_images(
                     ).images[0]
 
                     ts_str = time.strftime("%Y%m%d%H%M%S", time.localtime())
-                    num_suffix = f"e{epoch:06d}" if epoch is not None else f"{steps:06d}"
+                    epoch_suffix = f"e{epoch:06d}" if epoch is not None else "Nan"
+                    step_suffix = f"{steps:06d}" if steps is not None else "Nan"
                     seed_suffix = "" if seed is None else f"_{seed}"
                     img_filename = (
-                        f"{'' if args.output_name is None else args.output_name + '_'}{prompt}_{ts_str}_{num_suffix}.png"
+                        f"{'' if args.output_name is None else args.output_name + '_'}{prompt}_{ts_str}_{epoch_suffix}_{step_suffix}.png"
                     )
 
                     image.save(os.path.join(save_dir, img_filename))
