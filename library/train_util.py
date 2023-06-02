@@ -3056,7 +3056,7 @@ def sample_images(
     )
     pipeline.to(device)
 
-    save_dir = args.output_dir + "/sample"
+    save_dir = args.output_dir + "/sample/" + args.output_name
     os.makedirs(save_dir, exist_ok=True)
 
     rng_state = torch.get_rng_state()
@@ -3064,11 +3064,11 @@ def sample_images(
 
     with torch.no_grad():
         with accelerator.autocast():
-            for i, prompt in enumerate(prompts):
+            for i, promptn in enumerate(prompts):
                 for ik in range(args.samples_per_prompt):
                     if not accelerator.is_main_process:    
                         continue
-                    prompt = prompt.strip()
+                    prompt = promptn.strip()
                     if len(prompt) == 0 or prompt[0] == "#":
                         continue
 
@@ -3143,11 +3143,11 @@ def sample_images(
                     ).images[0]
 
                     ts_str = time.strftime("%Y%m%d%H%M%S", time.localtime())
-                    epoch_suffix = f"e{epoch:06d}" if epoch is not None else "Nan"
+                    epoch_suffix = f"{epoch:06d}" if epoch is not None else "Nan"
                     step_suffix = f"{steps:06d}" if steps is not None else "Nan"
                     seed_suffix = "" if seed is None else f"_{seed}"
                     img_filename = (
-                        f"{'' if args.output_name is None else args.output_name + '_'}{prompt}_{ts_str}_{epoch_suffix}_{step_suffix}.png"
+                        f"{'' if args.output_name is None else args.output_name + '_'}{prompt}_{epoch_suffix}_{step_suffix}_{ts_str}.png"
                     )
 
                     image.save(os.path.join(save_dir, img_filename))
