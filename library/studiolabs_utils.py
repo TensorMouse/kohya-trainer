@@ -338,3 +338,247 @@ def convertImages(images, batch_size, num_batches):
                 executor.map(process_image, batch)
 
     print("All images have been converted")
+    
+def read_file(filename):
+    with open(filename, "r") as f:
+        contents = f.read()
+    return contents
+
+def write_file(filename, contents):
+    with open(filename, "w") as f:
+        f.write(contents)
+        
+def process_tags(filename, custom_tag, append, prefix_tag, remove_tag, keywords):
+    """
+    Processes tags in a file based on specified options.
+
+    Args:
+        filename (str): The name of the file to process.
+        custom_tag (str): The custom tag to modify existing tags or append/prefix to the tag list.
+        append (bool): Indicates whether to append the custom tag to the tag list.
+        prefix_tag (bool): Indicates whether to prefix the custom tag to the tag list.
+        remove_tag (bool): Indicates whether to remove occurrences of the custom tag from the tag list.
+        keywords (list): A list of keywords to search for in existing tags.
+
+    Returns:
+        None
+    """
+    contents = read_file(filename)
+    tags = [tag.strip() for tag in contents.split(',')]
+    custom_tags = [tag.strip() for tag in custom_tag.split(',')]
+    for custom_tag in custom_tags:
+        custom_tag = custom_tag.replace("_", " ")
+        if remove_tag:
+            while custom_tag in tags:
+                tags.remove(custom_tag)
+        else:
+            for i in range(len(tags)):
+                for keyword in keywords:
+                    if keyword in tags[i]:
+                        tags[i] = tags[i].replace(keyword, custom_tag)
+            if append:
+                tags.append(custom_tag)
+            if prefix_tag:
+                tags.insert(0, custom_tag)
+
+    contents = ', '.join(tags)
+    write_file(filename, contents)
+
+
+def process_directory(image_dir, tag, append, prefix_tag, remove_tag, recursive, keyword):
+    """
+    Processes tags in files within a directory based on specified options.
+
+    Args:
+        image_dir (str): The path to the directory containing the files.
+        tag (str): The custom tag to modify existing tags or append/prefix to the tag list.
+        append (bool): Indicates whether to append the custom tag to the tag list.
+        prefix_tag (bool): Indicates whether to prefix the custom tag to the tag list.
+        remove_tag (bool): Indicates whether to remove occurrences of the custom tag from the tag list.
+        recursive (bool): Indicates whether to process files in subdirectories recursively.
+        keyword (str): The keyword to search for in existing tags.
+
+    Returns:
+        None
+    """
+    for filename in os.listdir(image_dir):
+        file_path = os.path.join(image_dir, filename)
+        
+        if os.path.isdir(file_path) and recursive:
+            process_directory(file_path, tag, append, prefix_tag, remove_tag, recursive, keyword)
+        elif filename.endswith(extension):
+            process_tags(file_path, tag, append, prefix_tag, remove_tag, keyword)
+            
+
+def custom_caption_tag(config, train_image_folder):
+    """
+    Performs custom caption/tag operations based on the configurations specified in the provided config object.
+
+    Args:
+        config (configparser.ConfigParser): The config object containing the parameter values.
+        
+    Config Parameters:
+        extension: The file extension for caption/tag files
+        custom_tag:  The custom tag to be added, modified, or removed
+        keywords: Keywords used to identify tags for modification
+        sub_folder: The subfolder within the image directory to process
+        append: Indicates whether to append the custom tag
+        prefix_tag: Indicates whether to prefix the custom tag
+        remove_tag: Indicates whether to remove the custom tag
+        recursive: Indicates whether to process subdirectories recursively
+
+    Returns:
+        None
+    """
+
+    # Retrieve the parameter values from the config object
+    extension = config.get('CustomCaptionTag', 'extension')
+    custom_tag = config.get('CustomCaptionTag', 'custom_tag')
+    keywords = config.get('CustomCaptionTag', 'keywords').split(',')
+    sub_folder = config.get('CustomCaptionTag', 'sub_folder')
+    append = config.getboolean('CustomCaptionTag', 'append')
+    prefix_tag = config.getboolean('CustomCaptionTag', 'prefix_tag')
+    remove_tag = config.getboolean('CustomCaptionTag', 'remove_tag')
+    recursive = config.getboolean('CustomCaptionTag', 'recursive')
+
+    # Determine the image directory based on the sub_folder parameter
+    if sub_folder == "None":
+        image_dir = train_image_folder
+    elif sub_folder == "--all":
+        image_dir = train_image_folder
+        recursive = True
+    else:
+        image_dir = os.path.join(train_image_folder, sub_folder)
+        os.makedirs(image_dir, exist_ok=True)
+
+    # Create missing caption/tag files if necessary
+    if not any([filename.endswith(extension) for filename in os.listdir(image_dir)]):
+        for filename in os.listdir(image_dir):
+            if filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
+                open(os.path.join(image_dir, filename.split(".")[0] + extension), "w").close()
+
+    # Process custom tags/directories
+    if custom_tag:
+        process_directory(image_dir, custom_tag, append, prefix_tag, remove_tag, recursive, keywords)
+
+
+def run_captioning_process(config, train_image_folder, finetune_dir):
+    """
+    Runs the captioning process based on the configurations specified in the provided config object.
+
+    Args:
+        config (configparser.ConfigParser): The config object containing the parameter values.
+        train_image_folder (str): The path to the training image folder.
+        finetune_dir (str): The path to the directory containing the captioning scripts.
+
+    Returns:
+        None
+    """
+
+    # Retrieve the captioning type from the config object
+    captioning_type = config.get('Captioning', 'captioning')
+
+    # Check the captioning type and set the ArgsConfig accordingly
+    
+    # Config Parameters:
+    #     _train_data_dir: The directory containing the training images
+    #     batch_size: The batch size for the captioning process
+    #     beam_search: Indicates whether to use beam search during caption generation
+    #     min_length: The minimum length of generated captions
+    #     max_length: The maximum length of generated captions
+    #     debug: Indicates whether to enable verbose logging
+    #     caption_extension: The file extension for caption files
+    #     max_data_loader_n_workers: The maximum number of data loader workers
+    #     recursive: Indicates whether to process subdirectories recursively
+
+    if captioning_type == "BLIP":
+        ArgsConfig = {
+            "_train_data_dir": train_image_folder,
+            "batch_size": config.getint('Captioning', 'batch_size'),
+            "beam_search": config.getboolean('Captioning', 'beam_search'),
+            "min_length": config.getint('Captioning', 'min_length'),
+            "max_length": config.getint('Captioning', 'max_length'),
+            "debug": config.getboolean('Captioning', 'verbose_logging'),
+            "caption_extension": config.get('Captioning', 'caption_extension'),
+            "max_data_loader_n_workers": config.getint('Captioning', 'max_data_loader_n_workers'),
+            "recursive": config.getboolean('Captioning', 'recursive')
+        }
+        
+    # Config Parameters:
+    #     _train_data_dir: The directory containing the training images
+    #     batch_size: The batch size for the captioning process
+    #     beam_search: Indicates whether to use beam search during caption generation
+    #     min_length: The minimum length of generated captions
+    #     max_length: The maximum length of generated captions
+    #     debug: Indicates whether to enable verbose logging
+    #     caption_extension: The file extension for caption files
+    #     max_data_loader_n_workers: The maximum number of data loader workers
+    #     recursive: Indicates whether to process subdirectories recursively
+
+    elif captioning_type == "Waifu":
+        ArgsConfig = {
+            "_train_data_dir": train_image_folder,
+            "batch_size": config.getint('Captioning', 'batch_size'),
+            "repo_id": config.get('Captioning', 'model'),
+            "recursive": config.getboolean('Captioning', 'recursive'),
+            "remove_underscore": True,
+            "general_threshold": config.getfloat('Captioning', 'general_threshold'),
+            "character_threshold": config.getfloat('Captioning', 'character_threshold'),
+            "caption_extension": config.get('Captioning', 'caption_extension'),
+            "max_data_loader_n_workers": config.getint('Captioning', 'max_data_loader_n_workers'),
+            "debug": config.getboolean('Captioning', 'verbose_logging'),
+            "undesired_tags": config.get('Captioning', 'undesired_tags')
+        }
+    else:
+        print("No captioning option selected. Skipping captioning process.")
+        return
+
+    # Build the command-line arguments based on ArgsConfig
+    args = ""
+    for k, v in ArgsConfig.items():
+        if k.startswith("_"):
+            args += f'"{v}" '
+        elif isinstance(v, str):
+            args += f'--{k}="{v}" '
+        elif isinstance(v, bool) and v:
+            args += f"--{k} "
+        elif isinstance(v, float) and not isinstance(v, bool):
+            args += f"--{k}={v} "
+        elif isinstance(v, int) and not isinstance(v, bool):
+            args += f"--{k}={v} "
+
+    # Define the paths to the captioning scripts
+    BLIP_captions = os.path.join(finetune_dir, 'make_captions.py')
+    WAIFU_captions = os.path.join(finetune_dir, 'tag_images_by_wd14_tagger.py')
+
+    # Define the final command based on the captioning type
+    final_args = f"python {BLIP_captions} {args}" if captioning_type == "BLIP" else f"python {WAIFU_captions} {args}"
+
+    # Run the captioning process
+    subprocess.run(final_args)
+    
+    
+def preprocess_images(config, dirs, batch_size, supported_types, background_colors):
+    """
+    Preprocesses the images based on the configurations specified in the provided config object.
+
+    Args:
+        config (configparser.ConfigParser): The config object containing the parameter values.
+        dirs (dict): A dictionary containing directory paths.
+        batch_size (int): The batch size for image processing.
+        supported_types (list): A list of supported image file extensions.
+        background_colors (list): A list of background colors for image conversion.
+
+    Returns:
+        None
+    """
+
+    train_image_folder = os.path.join(dirs['train_data_dir'], config.get('ImagePreprocessing', 'train_image_dir'))
+    convert = config.get('ImagePreprocessing', 'convert')
+    random_color = config.get('ImagePreprocessing', 'random_color')
+    recursive = config.get('ImagePreprocessing', 'recursive')
+
+    clean_directory(train_image_folder)
+    images = find_images(train_image_folder)
+    num_batches = len(images) // batch_size + 1
+    convertImages(images, batch_size, num_batches)
