@@ -1,7 +1,8 @@
 import os
 import subprocess
+import concurrent.futures
 import urllib.request
-import accelerate
+import time
 
 def create_dirs(root_dir="/home/studio-lab-user/sagemaker-studiolab-notebooks"):
     """
@@ -39,6 +40,7 @@ def create_dirs(root_dir="/home/studio-lab-user/sagemaker-studiolab-notebooks"):
 
     # Create directories
     for dir in [
+        root_dir,
         deps_dir,
         dreambooth_training_dir,
         dreambooth_config_dir,
@@ -48,12 +50,14 @@ def create_dirs(root_dir="/home/studio-lab-user/sagemaker-studiolab-notebooks"):
         inference_dir,
         vae_dir,
         train_data_dir,
+        accelerate_config,
         reg_data_dir,
     ]:
         os.makedirs(dir, exist_ok=True)
 
     # Create and return directory dictionary
     dirs = {
+        "root_dir" : root_dir,
         "deps_dir": deps_dir,
         "repo_dir": repo_dir,
         "pretrained_dir": pretrained_dir,
@@ -121,26 +125,29 @@ def clone_or_update_repo(url, update=False, save_directory=None, branch=None):
     return save_path
 
 
-def install_dependencies(install_dir=None, verbose=False, install_xformers=False):
+def install_dependencies(dirs, verbose=False, install_xformers=False):
     """
     Function to install dependencies required by the application.
 
     Parameters:
-        install_dir (str): The directory where the dependencies will be installed. Default is None.
+        dirs (dict): The dictionary with path variables.
         verbose (bool): Flag indicating whether to show verbose output during installation. Default is False.
         install_xformers (bool): Flag indicating whether to install additional xformers dependencies. Default is False.
 
     Returns:
         None
     """
+    
     print('Installation can take multiple minutes, enable "Verbose" to see progress')
     s = subprocess.getoutput('nvidia-smi')
-
+    
+    util_file = os.path.join(dirs['repo_dir'], "library/model_util.py")
+    req_file = os.path.join(dirs['repo_dir'], "requirements.txt")
     if 'T4' in s:
-        sed_command = "sed -i 's@cpu@cuda@' library/model_util.py"
+        sed_command = f"sed -i 's@cpu@cuda@' {util_file}"
         subprocess.run(sed_command, shell=True, check=True)
 
-    pip_install_command = f"pip install {'-q' if not verbose else ''} --upgrade -r requirements.txt"
+    pip_install_command = f"pip install {'-q' if not verbose else ''} --upgrade -r {req_file}"
     subprocess.run(pip_install_command, shell=True, check=True)
 
     pytorch_install_command = f"pip install {'-q' if not verbose else ''} torch==2.0.0+cu118 torchvision==0.15.1+cu118 torchaudio==2.0.1+cu118 torchtext==0.15.1 torchdata==0.6.0 --extra-index-url https://download.pytorch.org/whl/cu118 -U"
@@ -156,8 +163,8 @@ def install_dependencies(install_dir=None, verbose=False, install_xformers=False
     from accelerate.utils import write_basic_config
 
     #accelerate_config=os.path.join(install_dir,accelerate_config)
-    if not os.path.exists(accelerate_config):
-        write_basic_config(save_location=accelerate_config)
+    if not os.path.exists(dirs['accelerate_config']):
+        write_basic_config(save_location=dirs['accelerate_config'])
 
 def download_model(url, save_directory):
     """
@@ -312,7 +319,7 @@ def find_images(directory):
                 images.append(os.path.join(root, file))
     return images
 
-def convertImages(images, batch_size, num_batches):
+def convertImages(images, convert, batch_size, num_batches):
     """
     Convert a batch of images using multithreading.
 
@@ -321,13 +328,14 @@ def convertImages(images, batch_size, num_batches):
 
     Parameters:
         images (list): A list of image file paths to be converted.
+        convert (bool): Indicates whether image conversion should be performed.
         batch_size (int): The number of images to process in each batch.
         num_batches (int): The total number of batches to process.
 
     Returns:
         None
     """
-
+    from tqdm import tqdm
     if convert:
         # Create a ThreadPoolExecutor to parallelize image processing
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -385,7 +393,7 @@ def process_tags(filename, custom_tag, append, prefix_tag, remove_tag, keywords)
     write_file(filename, contents)
 
 
-def process_directory(image_dir, tag, append, prefix_tag, remove_tag, recursive, keyword):
+def process_directory(image_dir, tag, append, prefix_tag, remove_tag, recursive, keyword, extension):
     """
     Processes tags in files within a directory based on specified options.
 
@@ -459,7 +467,7 @@ def custom_caption_tag(config, train_image_folder):
 
     # Process custom tags/directories
     if custom_tag:
-        process_directory(image_dir, custom_tag, append, prefix_tag, remove_tag, recursive, keywords)
+        process_directory(image_dir, custom_tag, append, prefix_tag, remove_tag, recursive, keywords, extension)
 
 
 def run_captioning_process(config, train_image_folder, finetune_dir):
@@ -532,7 +540,7 @@ def run_captioning_process(config, train_image_folder, finetune_dir):
     else:
         print("No captioning option selected. Skipping captioning process.")
         return
-
+    
     # Build the command-line arguments based on ArgsConfig
     args = ""
     for k, v in ArgsConfig.items():
@@ -553,9 +561,11 @@ def run_captioning_process(config, train_image_folder, finetune_dir):
 
     # Define the final command based on the captioning type
     final_args = f"python {BLIP_captions} {args}" if captioning_type == "BLIP" else f"python {WAIFU_captions} {args}"
+    print(final_args)
+    time.sleep(10)
 
     # Run the captioning process
-    subprocess.run(final_args)
+    subprocess.run(final_args, shell=True, check=True)
     
     
 def preprocess_images(config, dirs, batch_size, supported_types, background_colors):
