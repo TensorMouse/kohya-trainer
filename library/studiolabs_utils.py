@@ -209,6 +209,7 @@ def preProcessingParams():
         ".npz",
         ".txt",
         ".json",
+        ".ini",
     ]
 
     background_colors = [
