@@ -2952,6 +2952,9 @@ def save_sd_model_on_train_end(
         )
         if args.huggingface_repo_id is not None:
             huggingface_util.upload(args, ckpt_file, "/" + ckpt_name, force_sync_upload=True)
+        if args.save_checkpoint_local != True:
+            os.remove(ckpt_file)
+
     else:
         out_dir = os.path.join(args.output_dir, model_name)
         os.makedirs(out_dir, exist_ok=True)
@@ -2962,6 +2965,8 @@ def save_sd_model_on_train_end(
         )
         if args.huggingface_repo_id is not None:
             huggingface_util.upload(args, out_dir, "/" + model_name, force_sync_upload=True)
+        if args.save_checkpoint_local != True:
+             os.remove(ckpt_file)
 
 
 # scheduler:

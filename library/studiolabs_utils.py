@@ -1,5 +1,6 @@
 import os
 import subprocess
+import configparser
 import concurrent.futures
 import urllib.request
 import time
@@ -19,9 +20,10 @@ def create_dirs(root_dir="/home/studio-lab-user/sagemaker-studiolab-notebooks"):
     # Define directory paths
     deps_dir = os.path.join(root_dir, "deps")
     repo_dir = os.path.join(root_dir, "kohya-trainer")
+    default_configs_dir = os.path.join(repo_dir, "default_configs")
     pretrained_dir = os.path.join(root_dir, "pretrained_model")
     vae_dir = os.path.join(root_dir, "vae")
-    trainer_config = os.path.join(repo_dir, "trainer_config.ini")
+    default_config = os.path.join(default_configs_dir, "default_config.ini")
 
     dreambooth_training_dir = os.path.join(root_dir, "dreambooth")
     dreambooth_config_dir = os.path.join(dreambooth_training_dir, "config")
@@ -42,6 +44,7 @@ def create_dirs(root_dir="/home/studio-lab-user/sagemaker-studiolab-notebooks"):
     for dir in [
         root_dir,
         deps_dir,
+        default_configs_dir,
         dreambooth_training_dir,
         dreambooth_config_dir,
         dreambooth_output_dir,
@@ -61,8 +64,9 @@ def create_dirs(root_dir="/home/studio-lab-user/sagemaker-studiolab-notebooks"):
         "deps_dir": deps_dir,
         "repo_dir": repo_dir,
         "pretrained_dir": pretrained_dir,
+        "default_configs_dir" : default_configs_dir,
         "vae_dir": vae_dir,
-        "trainer_config": trainer_config,
+        "default_config": default_config,
         "dreambooth_training_dir": dreambooth_training_dir,
         "dreambooth_config_dir": dreambooth_config_dir,
         "dreambooth_output_dir": dreambooth_output_dir,
@@ -173,20 +177,35 @@ def download_model(url, save_directory):
         url (str): The URL of the model file to download.
         save_directory (str): The directory where the model file will be saved.
     """
-    # Extract the file name from the URL
-    file_name = url.split('/')[-1]
-    
-    # Create the save path by joining the save directory and file name
-    save_path = os.path.join(save_directory, file_name)
+    try:
+        # Extract the file name from the URL
+        file_name = url.split('/')[-1]
 
-    # Check if the model file doesn't exist
-    if not os.path.exists(save_path):
-        print(f"Downloading model from {url}...")
-        # Download the model file from the URL
-        urllib.request.urlretrieve(url, save_path)
-        print("Model downloaded successfully.")
+        # Create the save path by joining the save directory and file name
+        save_path = os.path.join(save_directory, file_name)
+
+        # Check if the model file doesn't exist
+        if not os.path.exists(save_path):
+            print(f"Downloading model from {url}...")
+            # Download the model file from the URL
+            urllib.request.urlretrieve(url, save_path)
+            print("Model downloaded successfully.")
+        else:
+            print("Model already exists.")
+    except Exception as e:
+        print(f"Failed to download the model from {url}. Error: {str(e)}")
+        
+def get_config_from_folder(folder_path, config_name = 'config.ini'):
+    config = configparser.ConfigParser()
+    config_file = os.path.join(folder_path, config_name)
+    if os.path.isfile(config_file):
+        print('folder config exists: ', config_file)
+        config.read(config_file)
+        return config
     else:
-        print("Model already exists.")
+        print('folder config does NOT exist: ', config_file)
+        return None
+    
         
 def preProcessingParams():
     """
@@ -210,6 +229,7 @@ def preProcessingParams():
         ".txt",
         ".json",
         ".ini",
+        ".toml"
     ]
 
     background_colors = [
@@ -561,6 +581,7 @@ def run_captioning_process(config, train_image_folder, finetune_dir):
     WAIFU_captions = os.path.join(finetune_dir, 'tag_images_by_wd14_tagger.py')
 
     # Define the final command based on the captioning type
+    print(args)
     final_args = f"python {BLIP_captions} {args}" if captioning_type == "BLIP" else f"python {WAIFU_captions} {args}"
     print(final_args)
     time.sleep(10)
@@ -568,28 +589,163 @@ def run_captioning_process(config, train_image_folder, finetune_dir):
     # Run the captioning process
     subprocess.run(final_args, shell=True, check=True)
     
-    
-def preprocess_images(config, dirs, batch_size, supported_types, background_colors):
+def preprocess_folder(folder, dirs, default_processing_config):
     """
-    Preprocesses the images based on the configurations specified in the provided config object.
+    Process the specified folder based on the provided configurations.
 
     Args:
-        config (configparser.ConfigParser): The config object containing the parameter values.
+        folder (str): The folder to be processed.
         dirs (dict): A dictionary containing directory paths.
-        batch_size (int): The batch size for image processing.
-        supported_types (list): A list of supported image file extensions.
-        background_colors (list): A list of background colors for image conversion.
+        default_processing_config (configparser.ConfigParser): The default processing configuration.
 
     Returns:
         None
     """
 
-    train_image_folder = os.path.join(dirs['train_data_dir'], config.get('ImagePreprocessing', 'train_image_dir'))
-    convert = config.get('ImagePreprocessing', 'convert')
-    random_color = config.get('ImagePreprocessing', 'random_color')
-    recursive = config.get('ImagePreprocessing', 'recursive')
+    # Get folder-specific configuration or use the default if not available
+    folder_config = get_config_from_folder(folder, config_name = 'config.ini')
+    if folder_config is None:
+        folder_config = default_processing_config
+        
+    # Extract parameters from the folder configuration
+    convert = folder_config.get('ImagePreprocessing', 'convert')
+    random_color = folder_config.get('ImagePreprocessing', 'random_color')
+    recursive = folder_config.get('ImagePreprocessing', 'recursive')
 
-    clean_directory(train_image_folder)
-    images = find_images(train_image_folder)
+    # Preprocessing parameters
+    batch_size, supported_types, background_colors = preProcessingParams()
+
+    # Clean the directory before processing
+    clean_directory(folder, supported_types)
+
+    # Find images in the folder
+    images = find_images(folder)
+
+    # Calculate the number of batches
     num_batches = len(images) // batch_size + 1
-    convertImages(images, batch_size, num_batches)
+
+    # Convert the images
+    convertImages(images, convert, batch_size, num_batches)
+
+    # Run captioning process
+    run_captioning_process(folder_config, folder, dirs['finetune_dir'])
+
+    # Apply custom caption tag
+    custom_caption_tag(folder_config, folder)
+    
+
+def get_config_file_paths(folder, dirs):
+    """
+    Retrieves the file paths for sample_prompt.txt, config_file.toml, and dataset_config.toml.
+
+    Args:
+        folder (str): The folder path to search for the files.
+        dirs (dict): A dictionary containing directory paths, including 'default_configs_dir'.
+
+    Returns:
+        tuple: A tuple containing the file paths for sample_prompt.txt, config_file.toml, and dataset_config.toml.
+    """
+
+    sample_prompt = None
+    config_file = None
+    if "sample_prompt.txt" in os.listdir(folder):
+        sample_prompt = os.path.join(folder, "sample_prompt.txt")
+    else:
+        sample_prompt = os.path.join(dirs['default_configs_dir'], "sample_prompt.txt")
+
+    if "config.ini" in os.listdir(folder):
+        config_file = os.path.join(folder, "config.ini")
+    else:
+        config_file = None
+
+    return sample_prompt, config_file
+
+
+def update_model_paths(config, dirs):
+    """
+    Updates the model paths in the configuration dictionary.
+
+    Args:
+        config (dict): The configuration dictionary to update.
+        dirs (dict): A dictionary containing directory paths, including 'pretrained_dir' and 'vae_dir'.
+
+    Returns:
+        dict: The updated configuration dictionary.
+
+    Raises:
+        ValueError: If no model files are found in the specified pretrained directory.
+        ValueError: If no VAE model files are found in the specified directory.
+    """
+
+    model_files = os.listdir(dirs['pretrained_dir'])
+    if model_files:
+        pretrained_model_path = os.path.join(dirs['pretrained_dir'], model_files[0])
+        config['model_arguments']['pretrained_model_name_or_path'] = pretrained_model_path
+    else:
+        raise ValueError("No model files found in the specified directory.")
+
+    vae_files = os.listdir(dirs['vae_dir'])
+    if vae_files:
+        pretrained_vae_path = os.path.join(dirs['vae_dir'], vae_files[0])
+        config['model_arguments']['vae'] = pretrained_vae_path
+    else:
+        raise ValueError("No VAE model files found in the specified directory.")
+
+    return config
+
+def get_config_dict_from_ini(file_path):
+    # Read the file
+    with open(file_path, 'r') as file:
+        content = file.readlines()
+
+    # Create an empty dictionary
+    token_dictionary = {}
+
+    # Process each line of the file
+    for line in content:
+        # Extract the key-value pairs
+        key, value = line.strip().split(' = ')
+        # Add the key-value pair to the dictionary
+        token_dictionary[key] = value
+
+    return token_dictionary
+
+
+    
+def get_train_args(config):
+    args = ""
+    for k, v in config.items():
+        print(k,v)
+        if k.startswith("_"):
+            args += f'"{v}" '
+        elif isinstance(v, str):
+            args += f'--{k}="{v}" '
+        elif isinstance(v, bool) and v:
+            args += f"--{k} "
+        elif isinstance(v, float) and not isinstance(v, bool):
+            args += f"--{k}={v} "
+        elif isinstance(v, int) and not isinstance(v, bool):
+            args += f"--{k}={v} "
+
+    return args
+
+def get_font():
+    # Get the list of font names
+    font_names = [f.name for f in fm.fontManager.ttflist]
+    #print([(i,k) for i,k in enumerate(font_names)])
+    font_path = fm.findfont(font_names[17])
+    fontsize = 40
+    font = ImageFont.truetype(font_path, fontsize)
+    return font, fontsize
+
+def fetch_image_locations(directory):
+    # Fetch image files from the directory
+    image_locations = [f for f in os.listdir(directory) if f.endswith('.png') or f.endswith('.jpg')]
+    return image_locations
+
+def main(directory,grid_save_dir):
+    top_space = 40
+    left_space = 400
+    text_offset = 4
+    padding = 20  # Padding between images
+    text_width_limit = 750 

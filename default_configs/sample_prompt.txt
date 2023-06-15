@@ -1,0 +1,7 @@
+my_custom_tag face, high detailed skin, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3 --n weird eyes, glasses, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry --w 512 --h 768 --l 7 --s 35
+
+my_custom_tag in a business suit, (cowboy shot:1.2), high detailed skin, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3 --n weird eyes, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry --w 512 --h 768 --l 7 --s 35
+
+my_custom_tag posing for mens fashion, high detailed skin, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3  --n weird eyes, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry --w 512 --h 768 --l 7 --s 35
+
+my_custom_tag jojo pose, athletic, strong, high detailed skin, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3 --n weird eyes, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry --w 512 --h 768 --l 7 --s 35
