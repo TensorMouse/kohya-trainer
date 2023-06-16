@@ -50,10 +50,35 @@ def train(args):
             )
     else:
         user_config = {
-            "datasets": [
-                {"subsets": config_util.generate_dreambooth_subsets_config_by_subdirs(args.train_data_dir, args.reg_data_dir)}
-            ]
+            'datasets': [
+                {
+                    'resolution': args.resolution,
+                    'min_bucket_reso':args.min_bucket_reso,
+                    'max_bucket_reso': args.max_bucket_reso,
+                    'caption_dropout_rate': args.caption_dropout_rate,
+                    'caption_tag_dropout_rate': args.caption_tag_dropout_rate,
+                    'caption_dropout_every_n_epochs': args.caption_dropout_every_n_epochs,
+                    'flip_aug': args.flip_aug,
+                    'color_aug': args.color_aug,
+                    'subsets': [
+                        {
+                            'image_dir': args.train_data_dir,
+                            'class_tokens': args.class_tokens,
+                            'num_repeats': args.num_repeats
+                        }
+                    ]
+                }
+            ],
+            'general': {
+                'enable_bucket': args.enable_bucket,
+                'caption_extension': args.caption_extension,
+                'shuffle_caption': args.shuffle_caption,
+                'keep_tokens': args.keep_tokens,
+                'bucket_reso_steps': args.bucket_reso_steps,
+                'bucket_no_upscale': args.bucket_no_upscale
+            }
         }
+
 
     blueprint = blueprint_generator.generate(user_config, args, tokenizer=tokenizer)
     train_dataset_group = config_util.generate_dataset_group_by_blueprint(blueprint.dataset_group)
@@ -152,6 +177,14 @@ def train(args):
     # dataloaderを準備する
     # DataLoaderのプロセス数：0はメインプロセスになる
     n_workers = min(args.max_data_loader_n_workers, os.cpu_count() - 1)  # cpu_count-1 ただし最大で指定された数まで
+    print('AAAAAAAAAAAfd',
+          train_dataset_group,
+          collater,
+          n_workers,
+          args.persistent_data_loader_workers,
+    )
+    
+    
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset_group,
         batch_size=1,

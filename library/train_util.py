@@ -1899,6 +1899,9 @@ def add_training_arguments(parser: argparse.ArgumentParser, support_dreambooth: 
     parser.add_argument("--output_dir", type=str, default=None, help="directory to output trained model / 学習後のモデル出力先ディレクトリ")
     parser.add_argument("--output_name", type=str, default=None, help="base name of trained model file / 学習後のモデルの拡張子を除くファイル名")
     parser.add_argument(
+        "--save_checkpoint_local", type=bool, default=False, help="save checkpoint on local machine?"
+    )
+    parser.add_argument(
         "--huggingface_repo_id", type=str, default=None, help="huggingface repo name to upload / huggingfaceにアップロードするリポジトリ名"
     )
     parser.add_argument(
@@ -2036,6 +2039,9 @@ def add_training_arguments(parser: argparse.ArgumentParser, support_dreambooth: 
     )
 
     parser.add_argument(
+        "--samples_per_prompt", type=int, default=1, help="generate N sample images per prompt"
+    )
+    parser.add_argument(
         "--sample_every_n_steps", type=int, default=None, help="generate sample images every N steps / 学習中のモデルで指定ステップごとにサンプル出力する"
     )
     parser.add_argument(
@@ -2106,6 +2112,12 @@ def add_dataset_arguments(
     )
     parser.add_argument(
         "--caption_extension", type=str, default=".caption", help="extension of caption files / 読み込むcaptionファイルの拡張子"
+    )
+    parser.add_argument(
+        "--class_tokens", type=str, default="myClassToken", help="added argument"
+    )   
+    parser.add_argument(
+        "--num_repeats", type=int, default=10, help="added argument"
     )
     parser.add_argument(
         "--caption_extention",

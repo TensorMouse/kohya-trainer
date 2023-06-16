@@ -729,15 +729,6 @@ def get_train_args(config):
 
     return args
 
-def get_font():
-    # Get the list of font names
-    font_names = [f.name for f in fm.fontManager.ttflist]
-    #print([(i,k) for i,k in enumerate(font_names)])
-    font_path = fm.findfont(font_names[17])
-    fontsize = 40
-    font = ImageFont.truetype(font_path, fontsize)
-    return font, fontsize
-
 def fetch_image_locations(directory):
     # Fetch image files from the directory
     image_locations = [f for f in os.listdir(directory) if f.endswith('.png') or f.endswith('.jpg')]
